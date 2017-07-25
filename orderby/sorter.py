@@ -1,10 +1,23 @@
 """
 Main use-case: sort list of dictionaries. Better explanation to appear here.
-TODO: support attrgetter()? -> maybe auto-select helper (itemgetter fails -> use attrgetter)
 TODO: repr() or str() -> back to parseable sql string :)
 """
+from operator import attrgetter, itemgetter
 from functools import total_ordering
-from operator import itemgetter
+
+
+class Getter:
+    def __init__(self, *args, desc=False):
+        self.args = args
+        self.desc = desc
+
+    def __call__(self, *args):
+        try:
+            value = itemgetter(*self.args)(*args)
+        except Exception:
+            value = attrgetter(*self.args)(*args)
+
+        return Desc(value) if self.desc else value
 
 
 @total_ordering
@@ -12,6 +25,7 @@ class Desc:
     """
     Helper class for reverse-comparing two objects.
     """
+
     def __init__(self, obj):
         self.obj = obj
 
@@ -27,18 +41,6 @@ class Desc:
         if not isinstance(other, self.__class__):
             raise NotImplemented
         return self.obj == other.obj
-
-
-class ItemGetterDesc:
-    """
-    Wrapper for Desc ordering on itemgetter.
-    Note: itemgetter can't be extended directly.
-    """
-    def __init__(self, *args):
-        self._itemgetter = itemgetter(*args)
-
-    def __call__(self, *args):
-        return Desc(self._itemgetter(*args))
 
 
 def orderby(qstring):
@@ -69,7 +71,7 @@ def orderby(qstring):
 def asc(*args):
     """
     Factory function for creating OrderBy chain, starting with ascending sort.
-    :param args: passed to `operator.itemgetter()`
+    :param args: passed to `operator.itemgetter()`/`operator.attrgetter()`
     :return: chainable OrderBy() instance with .desc() and .asc() methods
     """
     return OrderBy().asc(*args)
@@ -78,7 +80,7 @@ def asc(*args):
 def desc(*args):
     """
     Factory function for creating OrderBy chain, starting with descending sort.
-    :param args: passed to `operator.itemgetter()`
+    :param args: passed to `operator.itemgetter()`/`operator.attrgetter()`
     :return: chainable OrderBy() instance with .desc() and .asc() methods
     """
     return OrderBy().desc(*args)
@@ -94,17 +96,17 @@ class OrderBy:
     There is usually no need to instantiate this class directly.
     Use the exposed `asc()` and `desc()` functions instead.
     """
+
     def __init__(self):
         self.ordering = []
 
     def asc(self, *args):
-        self.ordering.append(itemgetter(*args))
+        self.ordering.append(Getter(*args))
         return self
 
     def desc(self, *args):
-        self.ordering.append(ItemGetterDesc(*args))
+        self.ordering.append(Getter(*args, desc=True))
         return self
 
     def __call__(self, obj):
         return tuple(x(obj) for x in self.ordering)
-
