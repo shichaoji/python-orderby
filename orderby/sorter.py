@@ -2,20 +2,30 @@
 Main use-case: sort list of dictionaries. Better explanation to appear here.
 TODO: repr() or str() -> back to parseable sql string :)
 """
+import re
 from operator import attrgetter, itemgetter
 from functools import total_ordering
 
 
 class Getter:
-    def __init__(self, *args, desc=False):
-        self.args = args
-        self.desc = desc
+    ATTR_RE = re.compile('\$([\w\.]+)', flags=re.ASCII)
 
-    def __call__(self, *args):
+    def __init__(self, attr, desc=False):
+        self.attr = attr
+        self.desc = desc
+        self.eval = '$' in attr
+
+    def __call__(self, obj):
         try:
-            value = itemgetter(*self.args)(*args)
+            if self.eval:
+                value = eval(self.ATTR_RE.sub(r'itemgetter("\1")(obj)', self.attr))
+            else:
+                value = itemgetter(self.attr)(obj)
         except Exception:
-            value = attrgetter(*self.args)(*args)
+            if self.eval:
+                value = eval(self.ATTR_RE.sub(r'attrgetter("\1")(obj)', self.attr))
+            else:
+                value = attrgetter(self.attr)(obj)
 
         return Desc(value) if self.desc else value
 
